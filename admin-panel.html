@@ -697,18 +697,33 @@
     }
   }
 
-  // ========== ЗБІР ЛОГІВ ==========
+  // ========== ЗБІР ЛОГІВ З ГОТОВИМ ЧАСОМ ==========
 
   async function loadGameLogs() {
     allGameLogs = [];
     
+    // Логи входів
     await collectLoginLogs();
+    
+    // Логи виходів
     await collectLogoutLogs();
-    await collectPurchaseLogsFromFirebase();
+    
+    // Логи покупок ЗАВЖДИ з часом
+    await collectPurchaseLogs();
+    
+    // Логи проходження тем
     await collectThemeLogs();
+    
+    // Логи друзів
     await collectFriendsLogs();
+    
+    // Логи досягнень
     await collectAchievementsLogs();
+    
+    // Логи підвищення рівня
     await collectLevelLogs();
+    
+    // Логи змін грошей
     await collectMoneyLogs();
     
     allGameLogs.sort((a, b) => b.timestamp - a.timestamp);
@@ -734,7 +749,6 @@
     } catch(e) { console.error(e); }
   }
 
-  // ЗБІР ЛОГІВ ВИХОДУ
   async function collectLogoutLogs() {
     try {
       const res = await fetch(DB + "logout_logs.json");
@@ -754,8 +768,8 @@
     } catch(e) { console.error(e); }
   }
 
-  // ЗБІР ЛОГІВ ПОКУПОК З ТОЧНИМ ЧАСОМ
-  async function collectPurchaseLogsFromFirebase() {
+  async function collectPurchaseLogs() {
+    // Логи з purchase_logs
     try {
       const res = await fetch(DB + "purchase_logs.json");
       const data = await res.json();
@@ -773,21 +787,23 @@
       }
     } catch(e) { console.error(e); }
     
-    // Також збираємо покупки з історії гравців
-    for (let player of allPlayers) {
-      if (player.purchaseHistory && player.purchaseHistory.length > 0) {
-        for (let purchase of player.purchaseHistory) {
+    // Логи з item_purchase_logs
+    try {
+      const res = await fetch(DB + "item_purchase_logs.json");
+      const data = await res.json();
+      if (data) {
+        Object.values(data).forEach(log => {
           allGameLogs.push({
             type: 'purchase',
-            player: player.name,
-            action: `🛒 Купівля: ${purchase.item}`,
-            details: `Ціна: ${purchase.price} ₴`,
-            time: purchase.time || 'невідомо',
-            timestamp: purchase.timestamp || Date.now()
+            player: log.player,
+            action: `🛒 Купівля предмета: ${log.item}`,
+            details: `Ціна: ${log.price} ₴`,
+            time: log.time,
+            timestamp: new Date(log.time).getTime()
           });
-        }
+        });
       }
-    }
+    } catch(e) { console.error(e); }
   }
 
   async function collectThemeLogs() {
@@ -800,7 +816,7 @@
             action: `📚 Проходження теми: ${theme}`,
             details: `${result.correct}/${result.total} правильних (${result.percent}%)`,
             time: result.date || 'невідомо',
-            timestamp: result.timestamp || new Date(result.date).getTime() || Date.now()
+            timestamp: result.timestamp || (result.date ? new Date(result.date).getTime() : Date.now())
           });
         }
       }
@@ -810,18 +826,34 @@
   async function collectFriendsLogs() {
     for (let player of allPlayers) {
       if (player.friends && player.friends.length > 0) {
-        for (let friend of player.friends) {
-          allGameLogs.push({
-            type: 'friend',
-            player: player.name,
-            action: `👥 Додано друга: ${friend}`,
-            details: `Всього друзів: ${player.friends.length}`,
-            time: player.friendsAddTime?.[friend] || 'невідомо',
-            timestamp: Date.now()
-          });
-        }
+        allGameLogs.push({
+          type: 'friend',
+          player: player.name,
+          action: `👥 Друзі: ${player.friends.length} друзів`,
+          details: `Список: ${player.friends.join(', ')}`,
+          time: player.friendsUpdated || 'невідомо',
+          timestamp: player.friendsTimestamp || Date.now()
+        });
       }
     }
+    
+    // Логи додавання друзів
+    try {
+      const res = await fetch(DB + "friend_add_logs.json");
+      const data = await res.json();
+      if (data) {
+        Object.values(data).forEach(log => {
+          allGameLogs.push({
+            type: 'friend',
+            player: log.player,
+            action: `👥 Додано друга: ${log.friend}`,
+            details: `Всього друзів: ${log.totalFriends}`,
+            time: log.time,
+            timestamp: new Date(log.time).getTime()
+          });
+        });
+      }
+    } catch(e) { console.error(e); }
   }
 
   async function collectAchievementsLogs() {
@@ -835,7 +867,7 @@
               action: `🏆 Отримано досягнення: ${ach}`,
               details: '',
               time: player.achievementsTime?.[ach] || 'невідомо',
-              timestamp: Date.now()
+              timestamp: player.achievementsTimestamp?.[ach] || Date.now()
             });
           }
         }
@@ -844,6 +876,25 @@
   }
 
   async function collectLevelLogs() {
+    // Логи з level_up_logs
+    try {
+      const res = await fetch(DB + "level_up_logs.json");
+      const data = await res.json();
+      if (data) {
+        Object.values(data).forEach(log => {
+          allGameLogs.push({
+            type: 'level',
+            player: log.player,
+            action: `⭐ Підвищення рівня до ${log.newLevel}`,
+            details: `Нагорода: +${log.reward} ₴`,
+            time: log.time,
+            timestamp: new Date(log.time).getTime()
+          });
+        });
+      }
+    } catch(e) { console.error(e); }
+    
+    // З історії гравців
     for (let player of allPlayers) {
       if (player.levelHistory && player.levelHistory.length > 0) {
         for (let level of player.levelHistory) {
@@ -879,24 +930,29 @@
     } catch(e) { console.error(e); }
   }
 
-  // Додати новий лог
+  // Функція для додавання логу (викликається з гри)
   async function addGameLog(player, type, action, oldBalance, newBalance) {
     const now = new Date();
     const timeStr = now.toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' });
     const timestamp = now.getTime();
     
-    const logEntry = { type, player, action, details: `Баланс: ${oldBalance} ₴ → ${newBalance} ₴`, time: timeStr, timestamp };
+    const logEntry = { player, action, details: `Баланс: ${oldBalance} ₴ → ${newBalance} ₴`, time: timeStr, timestamp };
     
     if (type === 'purchase') {
-      await fetch(DB + "purchase_logs.json", { method: 'POST', body: JSON.stringify(logEntry) });
+      await fetch(DB + "purchase_logs.json", { method: 'POST', body: JSON.stringify({ ...logEntry, itemName: action, price: oldBalance - newBalance, newBalance }) });
     } else if (type === 'money') {
-      await fetch(DB + "money_logs.json", { method: 'POST', body: JSON.stringify(logEntry) });
+      await fetch(DB + "money_logs.json", { method: 'POST', body: JSON.stringify({ ...logEntry, change: action, oldBalance, newBalance, reason: action }) });
+    } else if (type === 'level') {
+      await fetch(DB + "level_up_logs.json", { method: 'POST', body: JSON.stringify({ ...logEntry, newLevel: action, reward: newBalance }) });
+    } else if (type === 'friend') {
+      await fetch(DB + "friend_add_logs.json", { method: 'POST', body: JSON.stringify({ ...logEntry, friend: action, totalFriends: newBalance }) });
     } else {
       await fetch(DB + "game_logs.json", { method: 'POST', body: JSON.stringify(logEntry) });
     }
   }
 
-  // Функція для додавання логу виходу (викликається з main.js)
+  // Глобальна функція для виклику з main.js
+  window.addGameLog = addGameLog;
   window.addLogoutLog = async function(playerName, sessionTime) {
     const now = new Date();
     const timeStr = now.toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' });
@@ -950,7 +1006,10 @@
     await fetch(DB + "user_logs.json", { method: 'DELETE' });
     await fetch(DB + "logout_logs.json", { method: 'DELETE' });
     await fetch(DB + "purchase_logs.json", { method: 'DELETE' });
+    await fetch(DB + "item_purchase_logs.json", { method: 'DELETE' });
     await fetch(DB + "money_logs.json", { method: 'DELETE' });
+    await fetch(DB + "level_up_logs.json", { method: 'DELETE' });
+    await fetch(DB + "friend_add_logs.json", { method: 'DELETE' });
     showToast("✅ Всі логи очищено");
     loadGameLogs();
   }
