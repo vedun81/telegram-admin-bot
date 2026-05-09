@@ -162,7 +162,7 @@
 
     /* Список гравців */
     .players-list {
-      max-height: 400px;
+      max-height: 450px;
       overflow-y: auto;
     }
 
@@ -184,8 +184,14 @@
     }
 
     .player-stats {
-      font-size: 12px;
+      font-size: 11px;
       color: #aaa;
+    }
+
+    .player-password {
+      font-size: 10px;
+      color: #ffd700;
+      font-family: monospace;
     }
 
     .player-actions {
@@ -206,6 +212,7 @@
     .btn-success { background: #2ecc71; color: white; }
     .btn-warning { background: #f39c12; color: #1a1a2e; }
     .btn-danger { background: #e74c3c; color: white; }
+    .btn-info { background: #9b59b6; color: white; }
 
     /* Повідомлення */
     .message-card {
@@ -250,10 +257,51 @@
     /* Логи */
     .log-entry {
       background: rgba(255,255,255,0.05);
-      padding: 10px 12px;
+      padding: 12px;
       border-radius: 16px;
-      margin-bottom: 6px;
-      font-size: 12px;
+      margin-bottom: 8px;
+      font-size: 11px;
+    }
+
+    .log-time {
+      color: #ffd700;
+      font-family: monospace;
+    }
+
+    .log-player {
+      font-weight: bold;
+      color: #2ecc71;
+    }
+
+    .log-action {
+      color: #aaa;
+    }
+
+    .log-details {
+      color: white;
+    }
+
+    /* Фільтри логів */
+    .log-filters {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: rgba(255,255,255,0.1);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 50px;
+      color: #ccc;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .filter-btn.active {
+      background: #ffd700;
+      color: #1a1a2e;
     }
 
     /* Інпути */
@@ -272,7 +320,7 @@
     }
 
     hr {
-      margin: 20px 0;
+      margin: 15px 0;
       border-color: rgba(255,215,0,0.3);
     }
 
@@ -292,6 +340,20 @@
       display: none;
       white-space: nowrap;
     }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 9px;
+      margin-left: 5px;
+    }
+
+    .badge-login { background: #2ecc71; color: white; }
+    .badge-purchase { background: #f39c12; color: #1a1a2e; }
+    .badge-level { background: #9b59b6; color: white; }
+    .badge-friend { background: #3498db; color: white; }
+    .badge-theme { background: #e74c3c; color: white; }
 
     @media (max-width: 480px) {
       .toast { white-space: normal; text-align: center; max-width: 90%; }
@@ -323,7 +385,7 @@
       <button class="tab active" data-tab="players">👥 Гравці</button>
       <button class="tab" data-tab="control">⚙️ Управління</button>
       <button class="tab" data-tab="messages">💬 Підтримка</button>
-      <button class="tab" data-tab="logs">📋 Логи</button>
+      <button class="tab" data-tab="logs">📋 ВСІ ЛОГИ</button>
     </div>
 
     <!-- ВКЛАДКА ГРАВЦІ -->
@@ -352,6 +414,7 @@
 
       <h2 style="color:#ffd700; font-size:18px; margin-bottom:15px;">⚠️ Небезпечні дії</h2>
       <button class="btn btn-danger" onclick="resetAllPurchases()" style="width:100%;">🔄 Скинути ВСІ покупки ВСІХ гравців</button>
+      <button class="btn btn-danger" onclick="clearAllGameLogs()" style="width:100%; margin-top:10px;">🗑 Очистити ВСІ логи гри</button>
     </div>
 
     <!-- ВКЛАДКА ПІДТРИМКА -->
@@ -361,11 +424,20 @@
       </div>
     </div>
 
-    <!-- ВКЛАДКА ЛОГИ -->
+    <!-- ВКЛАДКА ВСІ ЛОГИ -->
     <div id="logsPanel" class="panel">
-      <h2 style="color:#ffd700; font-size:16px; margin-bottom:15px;">📋 Останні входи в гру</h2>
-      <div id="activityLog" class="players-list"></div>
-      <button class="btn btn-danger" onclick="clearAllLogs()" style="margin-top: 15px; width:100%;">🗑 Очистити всі логи</button>
+      <div class="log-filters">
+        <button class="filter-btn active" data-filter="all">📋 Всі</button>
+        <button class="filter-btn" data-filter="login">🔓 Вхід</button>
+        <button class="filter-btn" data-filter="purchase">🛒 Покупка</button>
+        <button class="filter-btn" data-filter="level">⭐ Підвищення рівня</button>
+        <button class="filter-btn" data-filter="theme">📚 Тема</button>
+        <button class="filter-btn" data-filter="friend">👥 Друзі</button>
+        <button class="filter-btn" data-filter="money">💰 Гроші</button>
+      </div>
+      <div id="gameLogsList" class="players-list">
+        <div style="text-align: center; padding: 20px;">Завантаження логів...</div>
+      </div>
     </div>
   </div>
 </div>
@@ -378,6 +450,8 @@
   const ADMIN_PASSWORD = "vedun81ansuz81";
   
   let allPlayers = [];
+  let allGameLogs = [];
+  let currentLogFilter = "all";
 
   // ========== ПЕРЕВІРКА ВХОДУ ==========
   function checkLogin() {
@@ -417,11 +491,21 @@
     };
   });
 
+  // Фільтри логів
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentLogFilter = btn.dataset.filter;
+      renderGameLogs();
+    };
+  });
+
   // ========== ЗАВАНТАЖЕННЯ ДАНИХ ==========
   async function loadAllData() {
     await loadPlayers();
     await loadMessages();
-    await loadActivityLog();
+    await loadGameLogs();
   }
 
   async function loadPlayers() {
@@ -456,6 +540,7 @@
       <div class="player-card">
         <div>
           <div class="player-name">${p.name || '???'}</div>
+          <div class="player-password">🔑 Пароль: ${p.pass || 'немає'}</div>
           <div class="player-stats">💰 ${(p.points || 0).toLocaleString()} ₴ | 🏆 ${((p.points_earned || p.points) || 0).toLocaleString()} | 🎚️ Рівень ${p.level || 1}</div>
         </div>
         <div class="player-actions">
@@ -474,7 +559,9 @@
     player.points = (player.points || 0) + 1000;
     await fetch(DB + "users/" + nick + ".json", { method: 'PUT', body: JSON.stringify(player) });
     showToast(`✅ ${nick} +1000 ₴`);
+    await addGameLog(nick, 'money', `+1000 ₴ (адмін)`, player.points);
     loadPlayers();
+    loadGameLogs();
   }
 
   // Інфо про гравця
@@ -482,7 +569,7 @@
     const res = await fetch(DB + "users/" + nick + ".json");
     const p = await res.json();
     if (!p) { showToast("❌ Гравця не знайдено!", true); return; }
-    alert(`📊 ІНФОРМАЦІЯ ПРО ГРАВЦЯ\n\n👤 Нікнейм: ${p.name}\n💰 Баланс: ${(p.points || 0).toLocaleString()} ₴\n🏆 Рейтинг: ${((p.points_earned || p.points) || 0).toLocaleString()}\n🎚️ Рівень: ${p.level || 1}\n🔑 Пароль: ${p.pass || 'немає'}\n📅 Реєстрація: ${p.regDate || 'невідомо'}`);
+    alert(`📊 ІНФОРМАЦІЯ ПРО ГРАВЦЯ\n\n👤 Нікнейм: ${p.name}\n🔑 Пароль: ${p.pass || 'немає'}\n💰 Баланс: ${(p.points || 0).toLocaleString()} ₴\n🏆 Рейтинг: ${((p.points_earned || p.points) || 0).toLocaleString()}\n🎚️ Рівень: ${p.level || 1}\n📅 Реєстрація: ${p.regDate || 'невідомо'}\n👥 Друзів: ${p.friends?.length || 0}\n🏆 Досягнень: ${Object.keys(p.achievements || {}).length}\n🎨 Стікерів: ${Object.keys(p.stickers || {}).length}\n🛍️ Покупок: ${Object.values(p.items || {}).filter(v => v === true).length}`);
   }
 
   // Додати гроші
@@ -498,10 +585,13 @@
     const player = await res.json();
     if (!player) { showToast("❌ Гравця не знайдено!", true); return; }
     
-    player.points = (player.points || 0) + num;
+    const oldPoints = player.points || 0;
+    player.points = oldPoints + num;
     await fetch(DB + "users/" + nick + ".json", { method: 'PUT', body: JSON.stringify(player) });
+    await addGameLog(nick, 'money', `+${num} ₴ (адмін)`, player.points);
     showToast(`✅ ${nick} +${num} ₴ (новий баланс: ${player.points} ₴)`);
     loadPlayers();
+    loadGameLogs();
   }
 
   // Відняти гроші
@@ -517,10 +607,13 @@
     const player = await res.json();
     if (!player) { showToast("❌ Гравця не знайдено!", true); return; }
     
-    player.points = Math.max(0, (player.points || 0) - num);
+    const oldPoints = player.points || 0;
+    player.points = Math.max(0, oldPoints - num);
     await fetch(DB + "users/" + nick + ".json", { method: 'PUT', body: JSON.stringify(player) });
+    await addGameLog(nick, 'money', `-${num} ₴ (адмін)`, player.points);
     showToast(`✅ ${nick} -${num} ₴ (новий баланс: ${player.points} ₴)`);
     loadPlayers();
+    loadGameLogs();
   }
 
   // Видалити гравця
@@ -528,9 +621,11 @@
     const nick = document.getElementById('targetNick').value.trim();
     if (!nick) { showToast("❌ Введіть нікнейм!", true); return; }
     if (confirm(`⚠️ Видалити гравця ${nick}? Цю дію НЕ МОЖНА скасувати!`)) {
+      await addGameLog(nick, 'delete', `Гравець видалений адміном`, 0);
       await fetch(DB + "users/" + nick + ".json", { method: 'DELETE' });
       showToast(`🗑 Гравець ${nick} видалений`);
       loadPlayers();
+      loadGameLogs();
       document.getElementById('targetNick').value = '';
     }
   }
@@ -561,11 +656,13 @@
       });
       if (changed && player.items) {
         await fetch(DB + "users/" + name + ".json", { method: 'PUT', body: JSON.stringify(player) });
+        await addGameLog(name, 'purchase', `СКИНУТО ВСІ ПОКУПКИ (адмін)`, 0);
         count++;
       }
     }
     showToast(`✅ Скинуто покупки для ${count} гравців!`);
     loadPlayers();
+    loadGameLogs();
   }
 
   // Повідомлення підтримки
@@ -622,34 +719,211 @@
     if (msgIndex !== -1) {
       player.supportMessages[msgIndex].reply = replyText;
       await fetch(DB + "users/" + playerName + ".json", { method: 'PUT', body: JSON.stringify(player) });
+      await addGameLog(playerName, 'support', `Відповідь: ${replyText.substring(0, 50)}...`, 0);
       showToast(`✅ Відповідь відправлено гравцю ${playerName}`);
       loadMessages();
+      loadGameLogs();
     }
   }
 
-  // Логи активності
-  async function loadActivityLog() {
+  // ========== ЗБІР ЛОГІВ З ГРИ ==========
+  
+  // Головна функція збору всіх логів
+  async function loadGameLogs() {
+    allGameLogs = [];
+    
+    // 1. Логи входів
+    await collectLoginLogs();
+    
+    // 2. Логи покупок (з кожного гравця)
+    await collectPurchaseLogs();
+    
+    // 3. Логи проходження тем
+    await collectThemeLogs();
+    
+    // 4. Логи друзів
+    await collectFriendsLogs();
+    
+    // 5. Логи досягнень
+    await collectAchievementsLogs();
+    
+    // 6. Логи підвищення рівня
+    await collectLevelLogs();
+    
+    // Сортуємо за часом (нові зверху)
+    allGameLogs.sort((a, b) => b.timestamp - a.timestamp);
+    
+    renderGameLogs();
+  }
+
+  async function collectLoginLogs() {
     try {
       const res = await fetch(DB + "user_logs.json");
       const data = await res.json();
-      const container = document.getElementById('activityLog');
-      if (!data) {
-        container.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;">📋 Лог порожній</div>';
-        return;
+      if (data) {
+        Object.values(data).forEach(log => {
+          allGameLogs.push({
+            type: 'login',
+            player: log.game_nick,
+            action: 'Вхід в гру',
+            details: '',
+            time: log.time,
+            timestamp: new Date(log.time).getTime() || Date.now()
+          });
+        });
       }
-      const logs = Object.values(data).reverse().slice(0, 30);
-      container.innerHTML = logs.map(log => `<div class="log-entry">🕐 ${log.time} — <strong>${log.game_nick}</strong></div>`).join('');
-    } catch(e) {
-      document.getElementById('activityLog').innerHTML = '<div style="text-align:center;padding:20px;color:#e74c3c;">❌ Помилка</div>';
+    } catch(e) { console.error(e); }
+  }
+
+  async function collectPurchaseLogs() {
+    for (let player of allPlayers) {
+      if (player.items) {
+        for (let [item, value] of Object.entries(player.items)) {
+          if (value === true && item !== 'gold_frame') {
+            allGameLogs.push({
+              type: 'purchase',
+              player: player.name,
+              action: 'Покупка',
+              details: `Куплено: ${item}`,
+              time: player.lastPurchaseTime || 'невідомо',
+              timestamp: Date.now()
+            });
+          }
+        }
+      }
     }
   }
 
-  async function clearAllLogs() {
-    if (confirm("Очистити всі логи входів гравців?")) {
-      await fetch(DB + "user_logs.json", { method: 'DELETE' });
-      loadActivityLog();
-      showToast("✅ Логи очищено");
+  async function collectThemeLogs() {
+    for (let player of allPlayers) {
+      if (player.themeResults) {
+        for (let [theme, result] of Object.entries(player.themeResults)) {
+          allGameLogs.push({
+            type: 'theme',
+            player: player.name,
+            action: `Проходження теми: ${theme}`,
+            details: `${result.correct}/${result.total} правильних (${result.percent}%)`,
+            time: result.date || 'невідомо',
+            timestamp: new Date(result.date).getTime() || Date.now()
+          });
+        }
+      }
     }
+  }
+
+  async function collectFriendsLogs() {
+    for (let player of allPlayers) {
+      if (player.friends && player.friends.length > 0) {
+        allGameLogs.push({
+          type: 'friend',
+          player: player.name,
+          action: 'Друзі',
+          details: `Додано друзів: ${player.friends.length} (${player.friends.join(', ')})`,
+          time: 'невідомо',
+          timestamp: Date.now()
+        });
+      }
+    }
+  }
+
+  async function collectAchievementsLogs() {
+    for (let player of allPlayers) {
+      if (player.achievements) {
+        for (let [ach, value] of Object.entries(player.achievements)) {
+          if (value === true) {
+            allGameLogs.push({
+              type: 'achievement',
+              player: player.name,
+              action: 'Отримано досягнення',
+              details: ach,
+              time: 'невідомо',
+              timestamp: Date.now()
+            });
+          }
+        }
+      }
+    }
+  }
+
+  async function collectLevelLogs() {
+    for (let player of allPlayers) {
+      if (player.level && player.level > 1) {
+        allGameLogs.push({
+          type: 'level',
+          player: player.name,
+          action: `Підвищення рівня`,
+          details: `Досягнуто рівень ${player.level}`,
+          time: 'невідомо',
+          timestamp: Date.now()
+        });
+      }
+    }
+  }
+
+  // Додати новий лог (з адмін-панелі)
+  async function addGameLog(player, type, action, newBalance) {
+    const now = new Date();
+    const timeStr = now.toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' });
+    
+    const logEntry = {
+      type: type,
+      player: player,
+      action: action,
+      details: newBalance ? `Новий баланс: ${newBalance} ₴` : '',
+      time: timeStr,
+      timestamp: now.getTime()
+    };
+    
+    // Зберігаємо в окремий лог-файл в Firebase
+    await fetch(DB + "game_logs.json", { 
+      method: 'POST', 
+      body: JSON.stringify(logEntry) 
+    });
+  }
+
+  // Відображення логів
+  function renderGameLogs() {
+    const container = document.getElementById('gameLogsList');
+    let filtered = allGameLogs;
+    
+    if (currentLogFilter !== 'all') {
+      filtered = allGameLogs.filter(log => log.type === currentLogFilter);
+    }
+    
+    if (filtered.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;">📋 Логів не знайдено</div>';
+      return;
+    }
+    
+    container.innerHTML = filtered.slice(0, 100).map(log => {
+      let badgeClass = '';
+      switch(log.type) {
+        case 'login': badgeClass = 'badge-login'; break;
+        case 'purchase': badgeClass = 'badge-purchase'; break;
+        case 'level': badgeClass = 'badge-level'; break;
+        case 'friend': badgeClass = 'badge-friend'; break;
+        case 'theme': badgeClass = 'badge-theme'; break;
+        default: badgeClass = 'badge-login';
+      }
+      
+      return `
+        <div class="log-entry">
+          <div class="log-time">🕐 ${log.time}</div>
+          <div><span class="log-player">👤 ${log.player}</span> <span class="badge ${badgeClass}">${log.type === 'login' ? 'Вхід' : log.type === 'purchase' ? 'Покупка' : log.type === 'level' ? 'Рівень' : log.type === 'friend' ? 'Друзі' : log.type === 'theme' ? 'Тема' : 'Інше'}</span></div>
+          <div class="log-action">📌 ${log.action}</div>
+          <div class="log-details">${log.details}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Очистити всі логи гри
+  async function clearAllGameLogs() {
+    if (!confirm("⚠️ Очистити ВСІ логи гри? Цю дію не можна скасувати!")) return;
+    await fetch(DB + "game_logs.json", { method: 'DELETE' });
+    await fetch(DB + "user_logs.json", { method: 'DELETE' });
+    showToast("✅ Всі логи очищено");
+    loadGameLogs();
   }
 
   // Сповіщення
