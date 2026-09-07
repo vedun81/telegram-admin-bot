@@ -1,4 +1,4 @@
-// js/admin-panel.js цй
+// js/admin-panel.js
 // Вхід — той самий нік і пароль, що й у грі, через справжній Firebase Authentication.
 // Доступ до самої панелі відкривається тільки якщо в базі стоїть admins/{uid} = true
 // (виставляється вручну через Firebase Console — див. README.md).
