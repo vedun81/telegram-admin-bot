@@ -267,7 +267,7 @@ function renderPlayers(list) {
       <div class="player-actions">
         <button class="btn btn-success" onclick="addMoney('${p.uid}')">💰+</button>
         <button class="btn btn-warning" onclick="removeMoney('${p.uid}')">💸-</button>
-        <button class="btn btn-primary" onclick="showResetHint('${escapeHtml(p.name||'').replace(/'/g,"&#39;")}')">🔑</button>
+        <button class="btn btn-primary" title="Змінити пароль" onclick="changePlayerPassword('${p.uid}','${escapeHtml(p.name||'').replace(/'/g,"&#39;")}')">🔑</button>
         <button class="btn btn-danger" onclick="deletePlayer('${p.uid}','${escapeHtml(p.name||'').replace(/'/g,"&#39;")}')">🗑️</button>
       </div>
     </div>
@@ -477,10 +477,32 @@ function searchLogs() {
   });
 }
 
-// ---------- Скидання пароля ----------
-// Пряме скидання пароля іншого гравця з браузера неможливе — це навмисне
-// обмеження Firebase Auth (безпека). Робиться окремим скриптом з Admin SDK,
-// який виконує розробник зі свого комп'ютера: scripts/reset-password.js
+// ---------- Пароль гравця ----------
+
+async function changePlayerPassword(uid, nick) {
+  const password = prompt('Новий пароль для гравця "' + (nick || uid) + '":');
+  if (password === null) return;
+
+  const newPassword = password.trim();
+  if (newPassword.length < 6 || newPassword.length > 128) {
+    showToast('Пароль має містити від 6 до 128 символів', true);
+    return;
+  }
+
+  try {
+    const setPassword = firebase.functions().httpsCallable('adminSetUserPassword');
+    await setPassword({ uid, password: newPassword });
+    showToast('✅ Пароль гравця змінено');
+  } catch (error) {
+    console.error(error);
+    const code = error && error.code ? String(error.code) : '';
+    if (code.includes('permission-denied')) {
+      showToast('❌ Недостатньо прав для зміни пароля', true);
+    } else {
+      showToast('❌ Не вдалося змінити пароль', true);
+    }
+  }
+}
 // Unified activity log: game events from /logs and administrative events from
 // /adminLogs. Game records are resolved to a player nickname before display.
 let activityLogsCache = [];
@@ -493,7 +515,8 @@ const ACTIVITY_LABELS = {
   game_started: 'Game started', game_finished: 'Game finished',
   points_added: 'Points added', points_removed: 'Points removed',
   test_created: 'Test created', test_updated: 'Test updated', test_deleted: 'Test deleted',
-  player_deleted: 'Player deleted', support_replied: 'Support reply'
+  player_deleted: 'Player deleted', support_replied: 'Support reply',
+  password_changed: 'Password changed'
 };
 
 function collectGameLogs(data, users) {
@@ -616,11 +639,4 @@ function renderLoginHistory() {
       <div style="font-size:11px;color:#aaa;margin-top:4px;">📅 ${entry.timestamp ? new Date(entry.timestamp).toLocaleDateString() : '—'} &nbsp; ⏰ ${entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '—'}</div>
     </div>
   `).join('');
-}
-
-function showResetHint(nick) {
-  alert('Щоб скинути пароль гравцю "' + nick + '":\n\n' +
-    '1. Відкрийте термінал у папці scripts вашого проєкту гри\n' +
-    '2. Виконайте:\n   node reset-password.js "' + nick + '" НовийПароль123\n\n' +
-    'Це не можна зробити прямо з браузера з міркувань безпеки.');
 }
