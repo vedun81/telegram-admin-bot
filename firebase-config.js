@@ -21,6 +21,10 @@ const rtdb = firebase.database();
 
 const NICK_EMAIL_DOMAIN = "ukrmova.app";
 
+// URL Vercel API для зміни пароля. Після розгортання вставте сюди адресу
+// на кшталт https://your-project.vercel.app/api/admin-set-password.
+const PASSWORD_API_URL = "https://telegram-admin-bot-main.vercel.app/api/admin-set-password";
+
 function nickToEmail(nick) {
   const value = nick.trim().toLowerCase();
   return value.includes('@') ? value : value + "@" + NICK_EMAIL_DOMAIN;
