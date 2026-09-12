@@ -490,16 +490,40 @@ async function changePlayerPassword(uid, nick) {
   }
 
   try {
-    const setPassword = firebase.functions().httpsCallable('adminSetUserPassword');
-    await setPassword({ uid, password: newPassword });
+    if (!PASSWORD_API_URL) {
+      showToast('❌ Не настроен сервер смены пароля', true);
+      return;
+    }
+
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch(PASSWORD_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + token
+      },
+      body: JSON.stringify({ uid, password: newPassword })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(result.error || 'Не вдалося змінити пароль');
+      error.code = result.code || 'password-api/error';
+      throw error;
+    }
     showToast('✅ Пароль гравця змінено');
   } catch (error) {
     console.error(error);
     const code = error && error.code ? String(error.code) : '';
-    if (code.includes('permission-denied')) {
+    if (code.includes('not-found')) {
+      showToast('❌ Функцію не розгорнуто у Firebase', true);
+    } else if (code.includes('permission-denied')) {
       showToast('❌ Недостатньо прав для зміни пароля', true);
+    } else if (code.includes('unauthenticated')) {
+      showToast('❌ Сесія адміністратора завершилась', true);
+    } else if (code.includes('invalid-argument')) {
+      showToast('❌ Некоректний пароль або гравець', true);
     } else {
-      showToast('❌ Не вдалося змінити пароль', true);
+      showToast('❌ ' + (error.message || 'Не вдалося змінити пароль'), true);
     }
   }
 }
